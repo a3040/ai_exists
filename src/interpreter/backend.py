@@ -101,12 +101,10 @@ def get_backend() -> LLMBackend:
     else:
         # Default paths (check relative first, then user's known path)
         portable_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models/finetuned_qwen"))
-        user_local_path = "/home/a3040/work/aipcmonitoring/models/qwen2.5-ultra-minimal/final"
-        
         if os.path.exists(portable_path):
             default_path = portable_path
         else:
-            default_path = user_local_path
+            default_path = "Qwen/Qwen2.5-1.5B-Instruct" # Fallback to HuggingFace ID if local not found
             
         model_path = os.getenv("MODEL_PATH", default_path)
         return LocalTransformersBackend(model_path=model_path)
