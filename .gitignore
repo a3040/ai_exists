@@ -42,3 +42,4 @@ data/
 .vscode/
 .idea/
 .DS_Store
+test_ollama.py
