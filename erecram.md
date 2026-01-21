@@ -72,9 +72,8 @@ L1	Sensing	specs/L1_data_phy_voc.md
 L2	Sensing	specs/L2_data_mapping.md	
 
 의미 토큰(Vphy​) 매핑 및 전처리
-L1	Interpreter	specs/L1_viz_llm.md	
-
-LLM 기반 상태 서사(Narrative) 생성 계층
+L1	Interpreter	specs/L1_viz_llm.md	LLM 기반 상태 서사(Narrative) 생성 계층
+L2	Core	specs/L2_meta_monitor.md	메타인지 모니터링 및 수면(Consolidation) 제어
 L1	Projection	specs/L1_action_loop.md	의도 생성 및 물리 피드백 폐루프 제어
 6. 결론 및 기대 효과
 

@@ -1,9 +1,7 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from peft import PeftModel
-import os
+from .backend import get_backend, LLMBackend
 
 @dataclass
 class Narrative:
@@ -14,65 +12,44 @@ class Narrative:
 class NarrativeInterpreter:
     def __init__(self, use_llm: bool = False):
         self.use_llm = use_llm
-        self.model = None
-        self.tokenizer = None
+        self.backend: Optional[LLMBackend] = None
         
-        # Hard constraints from L3-4.3
-        self.constraints = [
-            "Do not use anthropomorphic expressions.",
-            "Do not express emotions.",
-            "Do not generate control commands."
-        ]
-
         if self.use_llm:
-            self._load_model()
+            try:
+                self.backend = get_backend()
+                print("✅ [NarrativeInterpreter] LLM Backend initialized.")
+            except Exception as e:
+                print(f"❌ [NarrativeInterpreter] Failed to load backend: {e}")
+                self.use_llm = False
 
-    def _load_model(self):
-        # Default path relative to the workspace root or via environment variable
-        default_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../aipcmonitoring/models/qwen2.5-ultra-minimal/final"))
-        model_path = os.getenv("MODEL_PATH", default_path)
-        print(f"📥 [NarrativeInterpreter] Loading fine-tuned model from {model_path}...")
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
-            base_model = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                torch_dtype=torch.float16,
-                device_map="auto",
-                trust_remote_code=True
-            )
-            self.model = PeftModel.from_pretrained(base_model, model_path)
-            print("✅ [NarrativeInterpreter] Model loaded successfully.")
-        except Exception as e:
-            print(f"❌ [NarrativeInterpreter] Failed to load model: {e}")
-            self.use_llm = False
-
-    def interpret(self, token_sequence: List[str]) -> Narrative:
+    def interpret(self, token_sequence: List[str], metrics: torch.Tensor = None, entropy: float = 0.0) -> Narrative:
         """
-        L3-5.2 interpret() logic using Fine-tuned LLM
+        L3-5.2 interpret() logic with Physical Awareness
         """
         if not token_sequence:
             return Narrative("No data", "STABLE", 1.0)
 
         last_token = token_sequence[-1]
+        phys_info = ""
+        if metrics is not None:
+            # metrics shape: [1, 5] -> cpu, memory, disk, swap, filler
+            phys_info = f"(물리 지표: CPU {metrics[0,0]*100:.1f}%, RAM {metrics[0,1]*100:.1f}%, 엔트로피 {entropy:.3f})"
         
-        if self.use_llm and self.model:
+        if self.use_llm and self.backend:
             # LLM-based interpretation
-            prompt = f"System tokens: {', '.join(token_sequence)}\n위 토큰 시퀀스를 바탕으로 시스템 상태를 한국어로 간결하게 분석하시오:"
+            prompt = (
+                f"### 지시: 다음 물리 데이터를 분석하여 시스템 진단 로그를 한 문장으로 작성하라.\n"
+                f"### 제약: 인사말 금지, '물론' 금지, 설명 금지, '입니다/습니다' 지양, 즉시 결과만 기술할 것.\n"
+                f"### 예시:\n"
+                f"입력: <PHY_LOAD_RISING>, CPU 85%\n"
+                f"출력: 연산 부하 급증에 따른 상태 전이 발생 및 임계치 근접 진단됨.\n\n"
+                f"### 실제 입력:\n"
+                f"토큰: {', '.join(token_sequence[-3:])}\n"
+                f"지표: {phys_info}\n"
+                f"### 출력:"
+            )
             
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=100,
-                    temperature=0.7,
-                    do_sample=True,
-                    pad_token_id=self.tokenizer.pad_token_id
-                )
-            
-            # Extract only the generated part
-            full_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            # Remove prompt from output
-            summary = full_text.replace(prompt, "").strip()
+            summary = self.backend.generate(prompt, max_new_tokens=100)
             
             trend = "STABLE"
             if "<PHY_LOAD_SATURATED>" in token_sequence or "<PHY_ANOMALY>" in token_sequence:
@@ -83,14 +60,12 @@ class NarrativeInterpreter:
             return Narrative(summary, trend, 0.95)
         else:
             # Fallback Rule-based Narrative
-            summary = f"System state categorized as {last_token}."
+            summary = f"System state categorized as {last_token}. {phys_info}"
             trend = "STABLE"
             
             if "<PHY_LOAD_SATURATED>" in token_sequence:
-                summary += " High physical load detected."
                 trend = "CRITICAL"
             elif "<PHY_STATE_SHIFT>" in token_sequence:
-                summary += " Physical state transition in progress."
                 trend = "DRIFT"
                 
             return Narrative(summary, trend, 0.9)

@@ -1,40 +1,37 @@
 import torch
-from typing import List
+from typing import Optional
+from .backend import LLMBackend
 
 class ResponseGenerator:
-    def __init__(self, model, tokenizer):
-        self.model = model
-        self.tokenizer = tokenizer
+    def __init__(self, backend: Optional[LLMBackend]):
+        self.backend = backend
         
-    def generate(self, user_input: str, current_token: str, state_summary: str) -> str:
+    def generate(self, user_input: str, current_token: str, state_summary: str, metrics: torch.Tensor = None) -> str:
         """
-        Generate a response based on user input and the internal state of the entity.
+        Generate a response with awareness of physical metrics and backend flexibility.
         """
-        if not self.model or not self.tokenizer:
+        if not self.backend:
             return "..." # Silent fallback
+
+        phys_status = ""
+        if metrics is not None:
+            phys_status = f" [실시간 몸상태: CPU {metrics[0,0]*100:.1f}%, RAM {metrics[0,1]*100:.1f}%]"
 
         # Entity's "Persona" Instruction: Reactive, slightly detached, focused on its physical existence
         prompt = (
-            f"당신은 스스로의 물리적 상태를 인지하는 인공 계체입니다.\n"
-            f"현재 나의 상태 토큰: {current_token}\n"
-            f"현재 나의 상태 요약: {state_summary}\n"
-            f"사용자의 말: \"{user_input}\"\n\n"
-            f"위 자극에 대한 나의 반응을 아주 짧고 간결하게 한국어로 한 문장으로만 말하시오:"
+            f"### 지시: 외부 자극에 대해 계체의 내부 상태를 반영한 무미건조한 반응을 한 문장으로 기술하라.\n"
+            f"### 제약: 인사말 금지, 사회적 예의 금지, '물론' 금지, 인간 흉내 금지, 기계적 어조 유지.\n"
+            f"### 예시:\n"
+            f"자극: \"안녕?\"\n"
+            f"반응: 입력 신호 인지함. 현재 엔트로피 0.42로 안정 상태 유지 중.\n\n"
+            f"### 실제 상황:\n"
+            f"물리상태: {current_token} {phys_status}\n"
+            f"내부해석: {state_summary}\n"
+            f"외부자극: \"{user_input}\"\n"
+            f"### 반응:"
         )
 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=50,
-                temperature=0.8,
-                do_sample=True,
-                pad_token_id=self.tokenizer.pad_token_id
-            )
-        
-        full_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        response = full_text.replace(prompt, "").strip()
+        response = self.backend.generate(prompt, max_new_tokens=50)
         
         # Post-processing to ensure it's short
         response = response.split('\n')[0]

@@ -7,6 +7,7 @@ from mapping.token_mapper import PhyTokenMapper
 from interpreter.narrative import NarrativeInterpreter
 from interpreter.response import ResponseGenerator
 from projection.action import ActionPlanner
+from core.metacognition import MetacognitionMonitor
 
 import threading
 import queue
@@ -19,12 +20,11 @@ def input_thread(q: queue.Queue):
             q.put(text)
 
 def run_system():
-    # 1. Configuration & Initialization (from L3 spec)
+    # 1. Configuration & Initialization
     INPUT_DIM = 5
     FEATURE_DIM = 2048 # HEAVY-WEIGHT SCALE
     WINDOW_SIZE = 20
     
-    # NEW: Real-world body & Linguistic Encoder
     from sensing.physical_body import PhysicalBody
     from sensing.linguistic import LinguisticEncoder
     body = PhysicalBody()
@@ -45,37 +45,63 @@ def run_system():
     STATE_PATH = "entity_state.pt"
     ram.load_state(STATE_PATH)
     
-    # NEW: Enable LLM Interpreter & Responder
+    # NEW: Enable LLM Interpreter & Responder (Backend-aware)
     interpreter = NarrativeInterpreter(use_llm=True)
-    responder = ResponseGenerator(interpreter.model, interpreter.tokenizer)
+    responder = ResponseGenerator(interpreter.backend)
     planner = ActionPlanner(safety_limits=0.2)
+    meta = MetacognitionMonitor(ram)
     
     target_equilibrium = torch.zeros(FEATURE_DIM)
     token_history = []
     
     print("\n" + "="*60)
-    print("🚀 [Entity-Persistent System: HEAVY-WEIGHT & 2048-DIM]")
+    print("🚀 [Entity-Persistent System: MULTI-MODEL BACKEND]")
     print(f"상태 공간 2048-Dim. 영속성 파일: {STATE_PATH}")
     print("="*60 + "\n")
     
     try:
         t = 0
+        z_window = None
+        narrative = None # Initial state
+
         while True:
-            # 2. Sensing Path (Physical) - SLIM IMPACT
+            # 2. Metacognition Analysis
+            analysis = meta.monitor()
+            
+            # Check for sleep trigger
+            if not meta.sleep_mode and meta.should_sleep():
+                print("\n💤 [ErecRAM]: 피로도가 임계치를 초과했습니다. 서사 정리를 위해 휴면(Sleep) 모드로 진입합니다.")
+                meta.sleep_mode = True
+
+            if meta.sleep_mode:
+                # --- SLEEP MODE: INTERNAL CONSOLIDATION ---
+                result = meta.consolidate()
+                if t % 3 == 0:
+                    print(f"🌙 [Sleep] 정리 중... 남은 피로도: {result['current_fatigue']:.3f} | 삭제된 노이즈: {result['pruned']}")
+                
+                if not result['is_sleeping']:
+                    print("☀️ [ErecRAM]: 휴면이 종료되었습니다. 의식이 다시 명료해집니다.")
+                
+                time.sleep(2.0) # Sleep cycles are slower or just different
+                t += 1
+                continue
+
+            # --- AWAKE MODE: EXTERNAL INTERACTION ---
+            # 3. Sensing Path (Physical)
             x_t = body.sense()
             z_t = encoder.encode(x_t)
             
-            if t == 0:
+            if t == 0 or z_window is None:
                 z_window = z_t.unsqueeze(0).repeat(WINDOW_SIZE, 1)
             else:
                 z_window = torch.cat([z_window[1:], z_t.unsqueeze(0)], dim=0)
             
             s_abs, h, flag = abstractor.abstract(z_window)
             
-            # Update RAM with Body Persistence (alpha_continuity is very high here)
+            # Update RAM with Body Persistence
             ram.update_from_sensing(s_abs, time.time())
 
-            # 3. Handle Linguistic Input (Dialogue) - HEAVY IMPACT
+            # 4. Handle Linguistic Input (Dialogue) - HEAVY IMPACT
             if not input_q.empty():
                 user_text = input_q.get()
                 print(f"\n💬 [You]: {user_text}")
@@ -83,35 +109,38 @@ def run_system():
                 # Encode text to high-dim sensory vector
                 z_ling = ling_encoder.encode(user_text)
                 
-                # HEAVY IMPACT: Dialogue forces state shift by ignoring high alpha
+                # HEAVY IMPACT: Dialogue forces state shift
                 ram.current_state = (0.5 * ram.current_state) + (0.5 * z_ling)
                 
-                # NEW: Generate Response (Mouth)
+                # Generate Response (Mouth) with physical awareness
                 current_token = mapper.map(ram.current_state, h, flag)
-                response = responder.generate(user_text, current_token, narrative.summary if 'narrative' in locals() else "초기화 중")
+                summary_text = narrative.summary if narrative else "초기화 중"
+                response = responder.generate(user_text, current_token, summary_text, x_t)
                 print(f"🤖 [Entity]: {response}")
 
                 token_history.append("<PHY_LINGUISTIC_IMPACT>")
                 print("💥 [ErecRAM]: 대화 자극이 2048차원 평면에 깊은 흔적을 남겼습니다.")
 
-            # 4. Map to Token (from updated state)
+            # 5. Map to Token
             token = mapper.map(ram.current_state, h, flag)
             token_history.append(token)
             if len(token_history) > 15: token_history.pop(0)
 
-            # 5. Narrative Path (LLM Interpretation)
-            narrative = interpreter.interpret(token_history)
+            # 6. Narrative Path (LLM Interpretation)
+            narrative = interpreter.interpret(token_history, x_t, h)
             
-            # 6. Projection Path
+            # 7. Projection Path
             intent = planner.plan(ram.current_state, target_equilibrium)
             feedback = planner.execute(intent)
             ram.update_from_action_feedback(feedback)
             
-            # Logging (Every 5 steps or when dialogue occurs)
+            # Logging (Every 5 steps)
             if t % 5 == 0:
-                print(f"\n[Step {t:03}] Token: {token} | H: {h:.3f}")
+                print(f"\n[Step {t:03}] Token: {token} | Entropy: {h:.3f}")
                 print(f"📊 Live Metrics: CPU {x_t[0,0]*100:.1f}%, RAM {x_t[0,1]*100:.1f}%")
-                print(f"🧠 Narrative: {narrative.summary}")
+                print(f"🧐 {meta.get_summary(analysis)}")
+                if narrative:
+                    print(f"🧠 Narrative: {narrative.summary}")
             
             t += 1
             time.sleep(1.0)
@@ -124,12 +153,6 @@ def run_system():
         print("="*60)
         print("시스템이 종료되었습니다. 다음에 실행 시 이 시점부터 이어집니다.")
         print("="*60)
-            
-    except KeyboardInterrupt:
-        print("\n--- System Loop Interrupted ---")
-            
-    except KeyboardInterrupt:
-        print("\n--- System Loop Interrupted ---")
 
 if __name__ == "__main__":
     run_system()
