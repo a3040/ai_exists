@@ -1,11 +1,11 @@
 import torch
 import torch.nn.functional as F
 import math
-from typing import Dict, List
-from .erecram import ErecRAM
+from typing import Dict, List, Optional
+from .nas_erec import NASErecRAM
 
 class MetacognitionMonitor:
-    def __init__(self, ram: ErecRAM):
+    def __init__(self, ram: NASErecRAM):
         self.ram = ram
         self.analysis_history: List[Dict] = []
         self.sleep_mode = False
@@ -19,9 +19,11 @@ class MetacognitionMonitor:
         if not self.ram.memory_bank:
             return {"status": "empty"}
 
-        # 1. Self-Consistency (현재 상태와 메모리들 간의 평균 유사도)
-        states = torch.stack([cell.state for cell in self.ram.memory_bank])
-        weights = torch.tensor([cell.weight for cell in self.ram.memory_bank])
+        # 1. Consistency (현재 상태와 기억들의 유사도)
+        # Ensure device consistency for GPU support
+        device = self.ram.current_state.device
+        states = torch.stack([cell.state for cell in self.ram.memory_bank]).to(device)
+        weights = torch.tensor([cell.weight for cell in self.ram.memory_bank]).to(device)
         
         # Normalize weights
         norm_weights = F.softmax(weights, dim=0)
@@ -42,7 +44,8 @@ class MetacognitionMonitor:
 
         # 4. Fatigue (자극 누적도)
         # 신규 입력이 계속 들어오면 fatigue 상승, sleep 시 하강
-        self.fatigue += (1.0 - mean_similarity) * 0.05
+        # 4096차원에서는 노이즈가 많으므로 증가치를 대폭 낮춤 (0.05 -> 0.005)
+        self.fatigue += (1.0 - mean_similarity) * 0.005
         self.fatigue = max(0.0, min(1.0, self.fatigue))
 
         analysis = {
@@ -89,8 +92,8 @@ class MetacognitionMonitor:
             return False
         
         recent = self.analysis_history[-1]
-        # 피로도가 높거나, 엔트로피(혼란도)가 지속적으로 높을 때 수면 제안
-        if recent["fatigue"] > self.sleep_threshold:
+        # 수면 임계치 상향 (0.7 -> 0.85)
+        if recent["fatigue"] > 0.85:
             return True
         return False
 
@@ -106,15 +109,21 @@ class MetacognitionMonitor:
         self.ram.memory_bank = [cell for cell in self.ram.memory_bank if cell.weight > 0.05]
         pruned_count = initial_count - len(self.ram.memory_bank)
 
+        # Safety Check: 만약 모든 기억이 제거되었다면 중단
+        if not self.ram.memory_bank:
+            self.fatigue *= 0.5 # 강제 휴식 효과
+            return {"pruned": pruned_count, "current_fatigue": self.fatigue, "is_sleeping": self.sleep_mode}
+
         # 2. State Stabilization (현재 상태를 메모리의 가중 평균 방향으로 정렬)
-        states = torch.stack([cell.state for cell in self.ram.memory_bank])
-        weights = torch.tensor([cell.weight for cell in self.ram.memory_bank])
+        device = self.ram.current_state.device
+        states = torch.stack([cell.state for cell in self.ram.memory_bank]).to(device)
+        weights = torch.tensor([cell.weight for cell in self.ram.memory_bank]).to(device)
         norm_weights = F.softmax(weights, dim=0).unsqueeze(1)
         
         summary_state = torch.sum(states * norm_weights, dim=0)
         
         # 현재 상태를 내부 요약 상태로 부드럽게 전이 (자아의 내적 정합성 강화)
-        self.ram.current_state = (0.8 * self.ram.current_state) + (0.2 * summary_state)
+        self.ram.current_state.data = (0.8 * self.ram.current_state.data) + (0.2 * summary_state)
 
         # 3. Fatigue recovery (피로도 회복)
         self.fatigue *= 0.85 
@@ -133,3 +142,27 @@ class MetacognitionMonitor:
         sleep_str = " [SLEEPING]" if self.sleep_mode else ""
         summary = f"[Metacog]{sleep_str} Stat: {status} | Sim: {analysis.get('mean_similarity', 0):.3f} | Ent: {analysis.get('relative_entropy', 0):.3f} | Fatigue: {analysis.get('fatigue', 0):.3f}"
         return summary
+
+    # --- NAS Controller Logic ---
+
+    def search_architecture(self, analysis: Dict) -> Optional[Dict[str, str]]:
+        if not hasattr(self.ram, 'dna'):
+            return None 
+
+        # If entropy is sustained high (~0.9) over 20 steps, trigger search
+        recent_entropy = [a.get('relative_entropy', 0) for a in self.analysis_history[-20:]]
+        if len(recent_entropy) >= 20 and sum(recent_entropy)/20 > 0.85:
+            return self._propose_mutation()
+        
+        return None
+
+    def _propose_mutation(self) -> Dict[str, str]:
+        import random
+        from .modules import SEARCH_SPACE
+        
+        current_dna = self.ram.dna.copy()
+        gene_to_mutate = random.choice(list(SEARCH_SPACE.keys()))
+        new_value = random.choice(list(SEARCH_SPACE[gene_to_mutate].keys()))
+        
+        current_dna[gene_to_mutate] = new_value
+        return current_dna

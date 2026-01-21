@@ -33,17 +33,25 @@ class LocalTransformersBackend(LLMBackend):
         self.device = self.model.device
 
     def generate(self, prompt: str, max_new_tokens: int = 100) -> str:
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        tokens = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         with torch.no_grad():
             outputs = self.model.generate(
-                **inputs,
+                **tokens,
                 max_new_tokens=max_new_tokens,
-                temperature=0.7,
-                do_sample=True,
-                pad_token_id=self.tokenizer.pad_token_id
+                temperature=0.0, # Focused diagnostic output
+                do_sample=False,
+                pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
             )
         full_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        return full_text.replace(prompt, "").strip()
+        content = full_text.replace(prompt, "").strip()
+        
+        # Split by various possible headers to get the clean output
+        for marker in ["### 출력:", "### 반응:", "Report:", "진단:"]:
+            if marker in content:
+                content = content.split(marker)[-1].strip()
+        
+        # Avoid multi-line leakage
+        return content.split('\n')[0].strip()
 
 class OllamaBackend(LLMBackend):
     def __init__(self, model_name: str = "qwen2.5:1.5b", host: str = "http://localhost:11434"):
@@ -91,7 +99,14 @@ def get_backend() -> LLMBackend:
         model_name = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
         return OllamaBackend(model_name=model_name)
     else:
-        # Default path for the fine-tuned model (Local or relative)
-        default_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models/finetuned_qwen"))
+        # Default paths (check relative first, then user's known path)
+        portable_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models/finetuned_qwen"))
+        user_local_path = "/home/a3040/work/aipcmonitoring/models/qwen2.5-ultra-minimal/final"
+        
+        if os.path.exists(portable_path):
+            default_path = portable_path
+        else:
+            default_path = user_local_path
+            
         model_path = os.getenv("MODEL_PATH", default_path)
         return LocalTransformersBackend(model_path=model_path)

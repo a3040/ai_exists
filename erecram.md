@@ -60,7 +60,37 @@ VLA 구조를 차용하되, 계체의 안전성을 위해 출력을 엄격히 �
 
     물리 제어: 계산된 의도를 실제 구동 신호로 변환하여 물리 세계에 현상을 유발하고 루프를 완성한다.
 
-5. 전체 시스템 인덱스 (Dashboard Specs)
+6. System Specifications (V2: Heavy Evolution Edition)
+
+*   **State Dimension**: 4096-Dim (Optimized for NVIDIA RTX 4090)
+*   **Memory Capacity**: 2000 Cells (Approx. 32MB pure state storage)
+*   **Update Frequency**: 10Hz (Sensing) / Event-driven (Narrative)
+*   **Architecture**:
+    *   **Core**: `NASErecRAM` (Self-Reconfiguring Neural Architecture)
+    *   **NAS**: Real-time mutation of Attention/Update/Normalization modules based on Metacognition entropy.
+    *   **Metacognition**: L2 Monitor for Fatigue, Entropy, and Sleep-Consolidation.
+    *   **Soliloquy**: Self-generated questioning mechanism to maintain active existence during idle states.
+*   **Persistence**: `entity_state.pt` (Stores Weights + Memory + DNA + Evo-Log)
+
+7. Architectural Diagram (Conceptual)
+
+```
+[Physical World] <---> [Sensing (CPU/RAM)] ---> [Linguistic Encoder (4096-dim)]
+                                      |
+                                      v
+                               [NASErecRAM] <---> [Metacognition Monitor]
+                                      |                   |
+           [DNA History (Evo-Log)] <--+--> [NAS Controller (Mutation)]
+                                      |
+                                      +--> [Soliloquy Generator (Self-Talk)]
+                                      |
+                                      v
+                               [Narrative Interpreter (LLM)]
+                                      |
+      [User] <--- [Response] <--------+
+```
+
+8. 전체 시스템 인덱스 (Dashboard Specs)
 
 AI Coder 가동을 위한 CMD-INIT용 통합 인덱스입니다.
 Level	Module	Spec 파일명	핵심 책임 (Responsibility)

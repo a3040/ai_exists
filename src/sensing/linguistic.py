@@ -3,18 +3,19 @@ import torch.nn as nn
 from typing import List
 
 class LinguisticEncoder(nn.Module):
-    def __init__(self, vocab_size: int = 256, embed_dim: int = 128, hidden_dim: int = 512):
+    def __init__(self, feature_dim: int = 4096, vocab_size: int = 256, embed_dim: int = 128, hidden_dim: int = 512):
         super(LinguisticEncoder, self).__init__()
+        self.feature_dim = feature_dim
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         self.lstm = nn.LSTM(embed_dim, hidden_dim, num_layers=3, batch_first=True, bidirectional=True)
-        self.projection = nn.Linear(hidden_dim * 2, 2048) # NEW SCALE
+        self.projection = nn.Linear(hidden_dim * 2, feature_dim)
         
     def encode(self, text: str) -> torch.Tensor:
         """
-        Convert text into a 2048-dim vector.
+        Convert text into a high-dim vector.
         """
         if not text:
-            return torch.zeros(2048)
+            return torch.zeros(self.feature_dim)
             
         # Byte-level encoding (simple & robust for test)
         bytes_data = text.encode('utf-8')

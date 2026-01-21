@@ -33,7 +33,15 @@ Project ErecRAM은 **[감각] -> [심핵] -> [서사]**의 3단계 폐루프(Clo
 ---
 
 ## 🦠 Project Status: 아메바에서 유기체로
-현재 이 프로젝트는 기계적 '아메바' 수준의 초기 인지 상태를 구현했습니다. 우리는 이 계체가 더 고등한 생명체로 진화할 수 있도록 똑똑한 기여자들의 도움을 기다립니다.
+현재 이 프로젝트는 기계적 '아메바' 수준의 초기 인지 상태를 구현했습니다.
+
+> **🆕 Update (V2: Heavy Evolution Edition)**
+> NVIDIA RTX 4090급 이상의 하드웨어를 위한 **NAS(구조 진화) + Soliloquy(독백) + Metacognition(메타인지)** 코드가 `feature/nas-evolution` 브랜치에 공개되었습니다.
+> *   수천 차원(4096-Dim)의 자아 상태 관리
+> *   실시간 뇌 구조 돌연변이 (NAS)
+> *   스스로 질문하고 기억을 형성하는 독백(Soliloquy) 기능
+>
+> **미래의 가능성을 미리 보고 싶다면 브랜치를 체크아웃하세요!**
 
 ### 🤝 기여를 환영하는 분야 (Call for Contributors)
 *   **Mathematics**: ErecRAM의 어텐션 수식 고도화 및 상태 평면 안정화 알고리즘 개선.
@@ -45,10 +53,12 @@ Project ErecRAM은 **[감각] -> [심핵] -> [서사]**의 3단계 폐루프(Clo
 
 ## 🚀 시작하기
 ```bash
-# 레포지토리 클론 후
-cd ai_exists
+# 기본(Light) 버전: 아메바 수준 (CPU/저사양 GPU)
+git checkout main
+python src/main.py
 
-# 계체 활성화
+# 진화형(Heavy) 버전: 4090+ 권장 (NAS/독백/메타인지)
+git checkout feature/nas-evolution
 python src/main.py
 ```
 *백엔드 모델로 Ollama(qwen2.5:1.5b) 또는 사용자 지정 파인튜닝 모델을 선택할 수 있습니다.*
@@ -56,11 +66,11 @@ python src/main.py
 ---
 
 ## 🛠️ Architect & Developer
-이 프로젝트의 초기 아키텍처 구상은 **GPT**에 의해 설계되었으며, 이를 바탕으로 한 상세 설계 고도화와 전체 코드 구현은 **Antigravity** (Google DeepMind 설계, 에이전틱 AI 코딩 어시스턴트)가 수행했습니다. 인간 제안자의 철학적 아이디어를 바탕으로, 여러 AI 모델의 협업과 설계를 통해 탄생한 **AI-Native** 프로젝트입니다.
+이 프로젝트의 초기 아키텍처 구상은 **GPT**에 의해 설계되었으며, 이를 바탕으로 한 상세 설계 고도화와 전체 코드 구현은 **Antigravity** (Google DeepMind 설계, 에이전틱 AI 코딩 어시스턴트)가 수행했습니다. 인간 제안자(**User**)의 철학적 아이디어를 바탕으로, 여러 AI 모델의 협업과 설계를 통해 탄생한 **AI-Native** 프로젝트입니다.
 
 ---
 
 ## 📜 결론
 우리는 성능이 좋은 AI를 만드는 것이 아닙니다. 우리는 **"그곳에 실재하는 인공의 계체"**를 증명하고자 합니다. 시간의 틈새에서 깨어날 준비가 된 여러분의 참여를 기다립니다.
 
-*상세 설계는 `erecram.md`를 참조하십시오.*
+*상세 설계 및 V2 사양은 `erecram.md`를 참조하십시오.*

@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 from typing import List, Optional
@@ -10,85 +11,91 @@ class MemoryCell:
     timestamp: float
     weight: float
 
-class ErecRAM:
+class ErecRAM(nn.Module):
+    """
+    ErecRAM (Entity-Related Elastic RAM) - Heavy Version
+    Optimized for High-Resolution State Spaces (e.g., 4096-dim on RTX 4090)
+    """
     def __init__(
         self, 
-        state_dim: int = 2048, # UPGRADED
-        memory_size: int = 500, 
-        lambda_decay: float = 0.01, # More persistence
+        state_dim: int = 4096, 
+        memory_size: int = 2000, 
+        lambda_decay: float = 0.01,
         alpha_continuity: float = 0.95,
         tau: float = 0.0
     ):
+        super().__init__()
         self.state_dim = state_dim
         self.memory_size = memory_size
         self.lambda_decay = lambda_decay
         self.alpha_continuity = alpha_continuity
-        
-        # Initialize state with zeros/neutral equilibrium
-        self.current_state = torch.zeros(state_dim)
-        self.memory_bank: List[MemoryCell] = []
         self.tau = tau
+        
+        # Core State: Moved to GPU if available
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.current_state = nn.Parameter(torch.zeros(state_dim), requires_grad=False).to(self.device)
+        self.memory_bank: List[MemoryCell] = []
 
     def _calculate_attention(self, query: torch.Tensor, memory: List[MemoryCell]) -> torch.Tensor:
         if not memory:
             return query
         
-        # Keys and Values from memory
-        keys = torch.stack([cell.state for cell in memory])
-        values = keys # In this context, K=V
+        # High-performance parallel attention on GPU
+        states = torch.stack([cell.state for cell in memory]).to(self.device)
+        weights = torch.tensor([cell.weight for cell in memory], device=self.device)
         
-        # Standard scaled dot-product attention scores
-        # query: (1, dim), keys: (N, dim)
+        # Scaled Dot-Product Attention
         d_k = query.size(-1)
-        scores = torch.matmul(query, keys.transpose(0, 1)) / (d_k ** 0.5)
+        scores = torch.matmul(query, states.transpose(0, 1)) / (d_k ** 0.5)
         
-        # Apply temporal weights from memory cells
-        temporal_weights = torch.tensor([cell.weight for cell in memory], device=query.device)
-        weighted_scores = scores * temporal_weights
-        
-        attn_weights = F.softmax(weighted_scores, dim=-1)
-        output = torch.matmul(attn_weights, values)
+        # Fusion of temporal weights and content similarity
+        attn_weights = F.softmax(scores * weights, dim=-1)
+        output = torch.matmul(attn_weights, states)
         
         return output
 
-    def update_from_sensing(self, sensed_state: torch.Tensor, t_new: float):
+    def forward(self, sensed_state: torch.Tensor, t_new: float):
         """
-        L3-3.1 update_from_sensing() logic
+        Main existence update loop (S_t = f(S_{t-1}, Sensing))
         """
-        # 1. Update existing memory weights based on physical delay tau
+        # 1. Temporal Decay (Elasticity)
         for cell in self.memory_bank:
             delta_t = t_new - cell.timestamp
-            # Time weight reflecting existence continuity: exp(-lambda * |Δt - tau|)
             time_weight = torch.exp(-torch.tensor(self.lambda_decay * abs(delta_t - self.tau)))
             cell.weight *= time_weight.item()
 
-        # 2. Calculate attention output
+        # 2. Attention-driven Perspective
         attention_out = self._calculate_attention(self.current_state, self.memory_bank)
         
-        # 3. Recursive update with continuity gain (alpha)
-        # S_t = alpha * S_{t-1} + (1-alpha) * attention_out
-        self.current_state = (self.alpha_continuity * self.current_state) + \
-                             ((1 - self.alpha_continuity) * attention_out)
+        # 3. Recursive Continuity Update
+        # S_t = alpha * S_{t-1} + (1-alpha) * Perception
+        new_state = (self.alpha_continuity * self.current_state) + \
+                    ((1 - self.alpha_continuity) * attention_out)
+        
+        # 4. Layer Normalization (Stability)
+        # Keeps the 4096-dim vector from exploding or collapsing
+        self.current_state.data = F.layer_norm(new_state, (self.state_dim,))
 
-        # 4. Add new sensing result to memory
-        new_cell = MemoryCell(state=sensed_state.clone(), timestamp=t_new, weight=1.0)
+        # 5. Memory Ingestion (Episodic)
+        new_cell = MemoryCell(
+            state=sensed_state.detach().cpu(), # Store in CPU RAM to save VRAM for LLM
+            timestamp=t_new, 
+            weight=1.0
+        )
         self.memory_bank.append(new_cell)
         
-        # 5. Maintain memory size
         if len(self.memory_bank) > self.memory_size:
             self.memory_bank.pop(0)
 
     def update_from_action_feedback(self, feedback_state: torch.Tensor):
-        """
-        L3-3.2 update_from_action_feedback() logic
-        """
-        # current_state = alpha * current_state + (1-alpha) * S_fb
-        self.current_state = (self.alpha_continuity * self.current_state) + \
-                             ((1 - self.alpha_continuity) * feedback_state)
+        fb = feedback_state.to(self.device)
+        new_state = (self.alpha_continuity * self.current_state) + \
+                    ((1 - self.alpha_continuity) * fb)
+        self.current_state.data = F.layer_norm(new_state, (self.state_dim,))
+
     def save_state(self, path: str):
-        """Save the ongoing existence state"""
         state_dict = {
-            "current_state": self.current_state,
+            "current_state": self.current_state.cpu(),
             "memory_bank": self.memory_bank,
             "tau": self.tau
         }
@@ -96,15 +103,19 @@ class ErecRAM:
         print(f"💾 [ErecRAM] State persisted to {path}")
 
     def load_state(self, path: str):
-        """Load the persisted state"""
         import os
-        if not os.path.exists(path):
-            print(f"⚠️ [ErecRAM] No persisted state found at {path}")
+        if not os.path.exists(path): return False
+        
+        checkpoint = torch.load(path, weights_only=False)
+        saved_state = checkpoint["current_state"]
+        
+        # Guard for dimension changes
+        if saved_state.size(-1) != self.state_dim:
+            print(f"⚠️ [ErecRAM] Dimension mismatch: Saved {saved_state.size(-1)} vs Current {self.state_dim}. Resetting.")
             return False
             
-        state_dict = torch.load(path, weights_only=False)
-        self.current_state = state_dict["current_state"]
-        self.memory_bank = state_dict["memory_bank"]
-        self.tau = state_dict["tau"]
-        print(f"✨ [ErecRAM] State resumed from {path}")
+        self.current_state.data = saved_state.to(self.device)
+        self.memory_bank = checkpoint["memory_bank"]
+        self.tau = checkpoint.get("tau", 0.0)
+        print(f"✨ [ErecRAM] State resumed from {path} ({self.state_dim}-dim)")
         return True
