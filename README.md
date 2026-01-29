@@ -60,7 +60,7 @@ python src/main.py
 
 ---
 
-⚖️ License & Intellectual Property (권한 및 지적 재산권)
+## ⚖️ License & Intellectual Property (권한 및 지적 재산권)
 
 본 프로젝트는 인간의 철학적 사유와 인공지능(GPT, Antigravity)의 설계 협업으로 탄생한 AI-Native 지적 자산입니다. 프로젝트의 오용을 막고 상용 권리를 보전하기 위해 다음과 같은 이중 라이선스 구조를 따릅니다.
 1. 소스코드 (Software)
