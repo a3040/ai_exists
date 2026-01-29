@@ -1,0 +1,39 @@
+# Erec update rules (minimal core)
+
+def should_store_event(event, recent_events, threshold):
+    """
+    Decide whether an event should be stored in Erec.
+
+    event:
+        - energy
+        - shock_pattern
+        - phase_signature
+
+    recent_events:
+        recent similar events (not full history)
+
+    threshold:
+        adaptive threshold based on similarity + energy
+    """
+    similarity = compute_similarity(event, recent_events)
+
+    if similarity > threshold.similarity and event.energy > threshold.energy:
+        return True
+
+    if event.phase_transition:
+        return True
+
+    return False
+
+
+def update_erec(erec, event):
+    """
+    Store only event descriptors.
+    No continuous state, no trajectory samples.
+    """
+    erec.append({
+        "shock_pattern": event.shock_pattern,
+        "energy": event.energy,
+        "phase_signature": event.phase_signature,
+        "timestamp": event.timestamp
+    })

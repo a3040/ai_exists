@@ -20,6 +20,8 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+ref_old_concept/
+erec/
 
 # Virtual Environment
 venv/
