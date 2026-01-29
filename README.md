@@ -61,8 +61,10 @@ python src/main.py
 ---
 
 ## ⚖️ License & Intellectual Property (권한 및 지적 재산권)
+본 프로젝트는 인간 저작자가 주도적으로 설계·결정한 지적 창작물이다.
+GPT 및 기타 생성형 AI 도구는 아이디어 탐색과 표현을 보조하는 수단으로 활용되었으며,
+본 프로젝트의 모든 저작권 및 라이선스 권리는 명시된 인간 저작자에게 귀속된다.
 
-본 프로젝트는 인간의 철학적 사유와 인공지능(GPT, Antigravity)의 설계 협업으로 탄생한 AI-Native 지적 자산입니다. 프로젝트의 오용을 막고 상용 권리를 보전하기 위해 다음과 같은 이중 라이선스 구조를 따릅니다.
 1. 소스코드 (Software)
 
     AGPL-3.0 (GNU Affero General Public License v3.0)
