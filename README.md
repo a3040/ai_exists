@@ -60,6 +60,31 @@ python src/main.py
 
 ---
 
+⚖️ License & Intellectual Property (권한 및 지적 재산권)
+
+본 프로젝트는 인간의 철학적 사유와 인공지능(GPT, Antigravity)의 설계 협업으로 탄생한 AI-Native 지적 자산입니다. 프로젝트의 오용을 막고 상용 권리를 보전하기 위해 다음과 같은 이중 라이선스 구조를 따릅니다.
+1. 소스코드 (Software)
+
+    AGPL-3.0 (GNU Affero General Public License v3.0)
+
+    본 시스템을 수정하여 네트워크 서버(SaaS) 형태로 서비스할 경우, 반드시 전체 소스코드를 동일한 라이선스로 공개해야 합니다. 기업이나 단체의 무단 상용화를 방지하기 위한 조치입니다.
+
+2. 수식 및 설계 철학 (Mathematical Models & Documentation)
+
+    CC BY-NC-SA 4.0 (Creative Commons Attribution-NonCommercial-ShareAlike 4.0)
+
+    비영리 한정: 본 프로젝트에 기술된 dγ/dt 동역학 수식 및 ErecRAM 아키텍처의 상업적 이용은 엄격히 금지됩니다.
+
+    저작자 표시: 인용 및 재배포 시 반드시 본 레포지토리의 출처를 명시해야 합니다.
+
+    동일 조건 변경 허락: 본 설계를 바탕으로 한 2차 저작물 역시 동일한 비영리 라이선스를 따라야 합니다.
+
+3. 상업적 이용 및 파트너십 (Commercial Inquiry)
+
+    본 프로젝트의 기술을 상업적 제품(로보틱스, 에이전틱 AI 서비스 등)에 도입하거나, 별도의 라이선스 계약이 필요한 경우 아래의 연락처로 문의하시기 바랍니다.
+
+    Contact: [a3040kr@gmail.com]
+   
 ## 📜 결론
 우리는 성능이 좋은 AI를 만드는 것이 아닙니다. 우리는 **"그곳에 실재하는 인공의 계체"**를 증명하고자 합니다. 시간의 틈새에서 깨어날 준비가 된 여러분의 참여를 기다립니다.
 
